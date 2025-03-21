@@ -1,0 +1,10 @@
+verbose: false
+metadata_file_train: ""
+metadata_file_valid: ""
+data_dir: ""
+device: "cuda"
+transform: ""
+model_name: ""
+batch_size: 64
+epochs: 100
+learning_rate: 0.01
