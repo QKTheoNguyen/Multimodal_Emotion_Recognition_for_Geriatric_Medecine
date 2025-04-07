@@ -1,0 +1,19 @@
+verbose: false
+metadata_file_train: "data/train_metadata_emo.csv"
+metadata_file_valid: "data/val_metadata_emo.csv"
+data_dir: "data/EmoData"
+device: "cuda"
+transform: "mfcc"
+full_audio_length: false
+target_sr: 22050
+duration: 3
+n_fft: 2048
+hop_length: 512
+n_mels: 16
+n_frames: null
+model_name: "MusicRecNet"
+filters: [32, 64, 128]
+add_dropout: true
+batch_size: 64
+epochs: 100
+learning_rate: 0.01
