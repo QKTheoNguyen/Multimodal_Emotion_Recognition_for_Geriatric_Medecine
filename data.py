@@ -22,19 +22,21 @@ class_mapping_emo = {
 }
 
 class EmoDataset(Dataset):
-    def __init__(self, config, metadata_file, data_dir, transformation, device, random_sample):
+    def __init__(self, config, metadata_file, data_dir, transform, device, random_sample, model_name):
         self.metadata = pd.read_csv(metadata_file)
         self.config = config
         self.data_dir = data_dir
         self.device = device
-        self.transformation = transformation.to(self.device)
         self.random_sample = random_sample
+        self.model_name = model_name
 
+        self.n_mels = self.config["n_mels"]
         self.n_fft = self.config["n_fft"]
         self.hop_length = self.config["hop_length"]
         self.target_sr = self.config["target_sr"]
         self.full_audio_length = self.config["full_audio_length"]
-        self.transformation_type = self.config["transform"]
+        self.transform = transform
+        self.transformation = self._create_transformation()
         
         if self.config["n_frames"] is not None and self.config["duration"] is not None:
             raise ValueError("You can't specify both n_frames and duration")
@@ -46,6 +48,15 @@ class EmoDataset(Dataset):
             self.duration = self.config["duration"]
             self.n_samples = self.duration * self.target_sr
             self.n_frames = 1 + (self.n_samples - self.n_fft) // self.hop_length
+
+        if self.model_name == "AlexNet":
+            print('Using AlexNet model')
+            self.n_frames = 227
+            self.n_freq = 227
+            self.n_fft = self.n_freq * 2 - 1
+            self.hop_length = self.n_fft // 2
+            self.n_samples = self.n_frames * self.hop_length + self.n_fft - 1
+            self.duration = self.n_samples / self.target_sr
 
         print(f'Loading audio on length {self.n_samples}, duration {"{:.2f}".format(self.duration)}s, sample rate {self.target_sr}Hz')
 
@@ -82,7 +93,7 @@ class EmoDataset(Dataset):
 
         signal = self.transformation(signal)
 
-        if self.transformation_type == "mel_spectrogram":
+        if self.transform == "mel_spectrogram" or self.transform == "mfcc":
 
             ## normalize the output
 
@@ -93,6 +104,9 @@ class EmoDataset(Dataset):
 
             ## log normalization
             # signal = torch.log(signal)
+        
+        elif self.transform == "spectrogram":
+            signal = torchaudio.transforms.AmplitudeToDB(stype='magnitude', top_db=80)(signal)
 
         return signal, label_int
     
@@ -108,11 +122,51 @@ class EmoDataset(Dataset):
             else:
                 signal = signal[:, :self.n_samples]
         return signal
+    
+    def _create_transformation(self):
+        if self.transform == "mel_spectrogram":
+            transformation = torchaudio.transforms.MelSpectrogram(sample_rate=self.target_sr,
+                                                                n_fft=self.n_fft,
+                                                                hop_length=self.hop_length,
+                                                                n_mels=self.n_mels,
+                                                                normalized=False,
+                                                                center=False)
+        elif self.transform == "spectrogram":
+            transformation = torchaudio.transforms.Spectrogram(n_fft=self.n_fft, 
+                                                            hop_length=self.hop_length, 
+                                                            power=1, 
+                                                            normalized=True, 
+                                                            center=False)
+        elif self.transform == "power_spectrogram":
+            transformation = torchaudio.transforms.Spectrogram(n_fft=self.n_fft, 
+                                                            hop_length=self.hop_length, 
+                                                            power=2, 
+                                                            normalized=True, 
+                                                            center=False)
+        elif self.transform == "mfcc":
+            transformation = torchaudio.transforms.MFCC(sample_rate=self.target_sr,
+                                                        n_mfcc=self.n_mels,
+                                                        melkwargs={"n_fft": self.n_fft, 
+                                                                    "hop_length": self.hop_length, 
+                                                                    "n_mels": self.n_mels,
+                                                                    "normalized": False,
+                                                                    "center": False})
+        return transformation.to(self.device)
 
 
 if __name__ == "__main__":
 
+    import argparse
     import yaml
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--nfft", type=int, default=None)
+    parser.add_argument("--n_frames", type=int, default=None)
+    parser.add_argument("--hop_length", type=int, default=None)
+    parser.add_argument("-t","--transform", type=str, default=None)
+    parser.add_argument("-m","--model_name", type=str, default=None)
+
+    args = parser.parse_args()
 
     def load_config(config_path):
         print(f"Loading config from {config_path}")
@@ -127,35 +181,15 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     target_sr = config["target_sr"]
-    n_fft = config["n_fft"]
-    hop_length = config["hop_length"]
+    n_fft = config["n_fft"] if args.nfft is None else args.nfft
+    hop_length = config["hop_length"] if args.hop_length is None else args.hop_length
+    n_frames = config["n_frames"] if args.n_frames is None else args.n_frames
     n_mels = config["n_mels"]
-    transform = config["transform"]
+    transform = config["transform"] if args.transform is None else args.transform
+    model_name = args.model_name
 
 
-    if transform == "mel_spectrogram":
-
-        transformation = torchaudio.transforms.MelSpectrogram(sample_rate=target_sr,
-                                                              n_fft=n_fft,
-                                                              hop_length=hop_length,
-                                                              n_mels=n_mels,
-                                                              normalized=False,
-                                                              center=False)
-    
-    elif transform == "mfcc":
-        transformation = torchaudio.transforms.MFCC(sample_rate=target_sr,
-                                                    n_mfcc=n_mels,
-                                                    melkwargs={"n_fft": n_fft, 
-                                                                "hop_length": hop_length, 
-                                                                "n_mels": n_mels,
-                                                                "normalized": False,
-                                                                "center": False})
-
-    dataset = EmoDataset(config, metadata_file, data_dir, transformation, device, random_sample=True)
-    # print(f'dataset length : {len(dataset)}')
-
-    # signal, label = dataset[0]
-    # print(f'sample shape : {signal.shape}, label : {label}')
+    dataset = EmoDataset(config, metadata_file, data_dir, transform, device, random_sample=True, model_name=model_name)
 
     train_loader = DataLoader(dataset=dataset, 
                             batch_size=5, 
@@ -167,3 +201,4 @@ if __name__ == "__main__":
     print(f"Target shape : {target.size()}")
     print(f"Target : {target}")
     print(f'Data min : {data.min()}, max : {data.max()}')
+    print(f'Data mean : {data.mean()}, std : {data.std()}')

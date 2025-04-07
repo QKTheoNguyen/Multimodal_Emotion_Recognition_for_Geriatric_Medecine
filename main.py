@@ -52,7 +52,7 @@ if __name__ == "__main__":
     filters = config["filters"]
     add_dropout = config["add_dropout"]
     model_name = config["model_name"]
-    
+
     if config["n_frames"] is not None:
         n_frames = config["n_frames"]
         n_samples = (n_frames - 1) * hop_length + n_fft
@@ -61,29 +61,7 @@ if __name__ == "__main__":
         duration = config["duration"]
         n_samples = duration * target_sr
         n_frames = 1 + (n_samples - n_fft) // hop_length
-
-
-    # Create transform
-
-    if transform == "mel_spectrogram":
-
-        transformation = torchaudio.transforms.MelSpectrogram(sample_rate=target_sr,
-                                                              n_fft=n_fft,
-                                                              hop_length=hop_length,
-                                                              n_mels=n_mels,
-                                                              normalized=False,
-                                                              center=False)
-    
-    elif transform == "mfcc":
-        transformation = torchaudio.transforms.MFCC(sample_rate=target_sr,
-                                                    n_mfcc=n_mels,
-                                                    melkwargs={"n_fft": n_fft, 
-                                                                "hop_length": hop_length, 
-                                                                "n_mels": n_mels,
-                                                                "normalized": False,
-                                                                "center": False})
-
-    
+        
     # Define loss function, model and optimizer
     loss_fn = nn.CrossEntropyLoss()
 
@@ -100,12 +78,12 @@ if __name__ == "__main__":
     # optimizer = torch.optim.Adadelta(model.parameters(), lr=lr)
 
     # Create train and validation datasets and dataloaders
-    train_dataset = EmoDataset(config, metadata_file_train, data_dir, transformation, device, random_sample=True)
+    train_dataset = EmoDataset(config, metadata_file_train, data_dir, transform, device, random_sample=True, model_name=model_name)
     train_loader = DataLoader(dataset=train_dataset, 
                               batch_size=batch_size, 
                               shuffle=True)
     
-    valid_dataset = EmoDataset(config, metadata_file_valid, data_dir, transformation, device, random_sample=True)
+    valid_dataset = EmoDataset(config, metadata_file_valid, data_dir, transform, device, random_sample=True, model_name=model_name)
     valid_loader = DataLoader(dataset=valid_dataset, 
                               batch_size=batch_size, 
                               shuffle=False)

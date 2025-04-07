@@ -1,4 +1,5 @@
 import torch
+import torchvision.models as models
 from torch import nn
 from torchsummary import summary
   
@@ -48,6 +49,16 @@ class MusicRecNet(nn.Module):
         x = self.batchnorm(x)
         x = self.dense_2(x)
         x = self.softmax(x)
+        return x
+    
+class AlexNet(nn.Module):
+    def __init__(self, num_classes=7, pretrained=True):
+        super(AlexNet, self).__init__()
+        self.alexnet = models.alexnet(pretrained=pretrained)
+        self.alexnet.classifier[6] = nn.Linear(4096, num_classes)  # Change the last layer to output 7 classes
+
+    def forward(self, x):
+        x = self.alexnet(x)
         return x
 
 if __name__ == "__main__":
