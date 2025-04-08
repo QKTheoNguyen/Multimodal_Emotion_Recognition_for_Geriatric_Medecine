@@ -109,6 +109,9 @@ class EmoDataset(Dataset):
         elif self.transform == "spectrogram":
             signal = torchaudio.transforms.AmplitudeToDB(stype='magnitude', top_db=80)(signal)
 
+        elif self.transform == "power_spectrogram":
+            signal = torchaudio.transforms.AmplitudeToDB(stype='power', top_db=80)(signal)
+
         return signal, label_int
     
     def _reshape_signal(self, signal, random_sample):
