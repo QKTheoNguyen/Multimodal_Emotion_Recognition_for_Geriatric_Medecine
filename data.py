@@ -36,7 +36,6 @@ class EmoDataset(Dataset):
         self.target_sr = self.config["target_sr"]
         self.full_audio_length = self.config["full_audio_length"]
         self.transform = transform
-        self.transformation = self._create_transformation()
         
         if self.config["n_frames"] is not None and self.config["duration"] is not None:
             raise ValueError("You can't specify both n_frames and duration")
@@ -50,7 +49,7 @@ class EmoDataset(Dataset):
             self.n_frames = 1 + (self.n_samples - self.n_fft) // self.hop_length
 
         if self.model_name == "AlexNet":
-            print('Using AlexNet model')
+            self.n_mels = 227
             self.n_frames = 227
             self.n_freq = 227
             self.n_fft = self.n_freq * 2 - 1
@@ -59,6 +58,8 @@ class EmoDataset(Dataset):
             self.duration = self.n_samples / self.target_sr
 
         print(f'Loading audio on length {self.n_samples}, duration {"{:.2f}".format(self.duration)}s, sample rate {self.target_sr}Hz')
+
+        self.transformation = self._create_transformation()
 
     def __len__(self):
         return len(self.metadata)
