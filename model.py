@@ -1,5 +1,6 @@
 import torch
 import torchvision.models as models
+import timm
 from torch import nn
 from torchsummary import summary
   
@@ -52,26 +53,77 @@ class MusicRecNet(nn.Module):
         return x
     
 class AlexNet(nn.Module):
-    def __init__(self, num_classes=7, pretrained=True):
+    def __init__(self, num_classes=7, pretrained=True, fine_tune=True):
         super(AlexNet, self).__init__()
-        self.alexnet = models.alexnet(pretrained=pretrained)
+
+        self.alexnet = models.alexnet(weights="DEFAULT" if pretrained else None)
+        if not (fine_tune and pretrained):
+            for param in self.alexnet.parameters():
+                param.requires_grad = False
         self.alexnet.classifier[6] = nn.Linear(4096, num_classes)  # Change the last layer to output 7 classes
 
     def forward(self, x):
         x = self.alexnet(x)
         return x
+    
+
+    
+def get_model(model_name, num_classes, pretrained, fine_tune):
+
+    if model_name == 'alexnet':
+        model = AlexNet(num_classes=num_classes, pretrained=pretrained, fine_tune=fine_tune)
+
+    elif model_name in timm.list_models():
+        model = timm.create_model(model_name, pretrained=pretrained, num_classes=num_classes)
+
+        if not fine_tune:
+            # freeze all layers except the last one
+            for index, (name, param) in enumerate(model.named_parameters()):
+                if index < len(list(model.named_parameters())) - 2:
+                    param.requires_grad = False
+                else:
+                    param.requires_grad = True
+
+    else:
+        raise ValueError(f"Model {model_name} is not supported.")
+
+    return model
 
 if __name__ == "__main__":
     
-    n_mels = 16
-    n_samples = 3 * 22050
-    n_frames = 1 + (n_samples - 2048) // 512
-    print(f'n_frames : {n_frames}, n_samples : {n_samples}, n_mels : {n_mels}')
-    model_RecNet = MusicRecNet(n_mels=n_mels, n_frames=n_frames, filters=[32, 64, 128])
-    summary(model_RecNet, (1, n_mels, n_frames))
+    # n_mels = 16
+    # n_samples = 3 * 22050
+    # n_frames = 1 + (n_samples - 2048) // 512
+    # print(f'n_frames : {n_frames}, n_samples : {n_samples}, n_mels : {n_mels}')
+    # model_RecNet = MusicRecNet(n_mels=n_mels, n_frames=n_frames, filters=[32, 64, 128])
+    # summary(model_RecNet, (1, n_mels, n_frames))
 
-    print(f'----- MusicRecNet model -----')
-    x = torch.randn(32, 1, n_mels, n_frames)
-    y = model_RecNet(x)
+    # print(f'----- MusicRecNet model -----')
+    # x = torch.randn(32, 1, n_mels, n_frames)
+    # y = model_RecNet(x)
+    # print(f'Input : {x.size()}')
+    # print(f'Output : {y.size()}')
+    #
+
+    model_name = 'vgg13_bn'
+    print(f'----- {model_name} model -----')
+    model = get_model(model_name, num_classes=8, pretrained=True, fine_tune=True).to(device='cuda')
+
+
+    summary(model, (3, 227, 227))
+    x = torch.randn(32, 3, 227, 227).to(device='cuda')
+    y = model(x)
     print(f'Input : {x.size()}')
-    print(f'Output : {y.size()}')     
+    print(f'Output : {y.size()}')
+
+    # model_name = 'resnet50'
+    # print(f'----- {model_name} model -----')
+    # model = timm.create_model(model_name, pretrained=True)
+    # model = model.to(device='cuda')
+    # summary(model, (3, 227, 227))
+    # x = torch.randn(32, 3, 227, 227).to(device='cuda')
+    # y = model(x)
+    # y_forward = model.forward_features(x)
+    # print(f'Input : {x.size()}')
+    # print(f'Output : {y.size()}')
+    # print(f'Output forward_features : {y_forward.size()}')

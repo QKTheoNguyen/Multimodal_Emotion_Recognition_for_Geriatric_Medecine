@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from model import *
 from torch.utils.data import DataLoader
+from data import *
 # from data import EmoDataset
 
 class_mapping = {
@@ -25,7 +26,8 @@ class_mapping_emo = {
     'fear': 3,
     'disgust': 4,
     'surprise': 5,
-    'neutral': 6
+    'neutral': 6,
+    'boredom': 7,
 }
 
 def load_config(config_path):
@@ -37,49 +39,33 @@ def evaluate_model(model,
                    model_dir,
                    metadata_file_test, 
                    config,
-                   transformation,
-                   transformation_type,
-                   device,
                    show_matrix=False):
     
     model.eval()
 
-    
+    print(f"Evaluating {config['model_name']} model...")
+
     metadata = pd.read_csv(metadata_file_test)
-    duration = config["duration"]
     data_dir = config["data_dir"]
-    target_sr = config["target_sr"]
-    n_samples = target_sr * duration
     correct = 0
-    confusion_matrix = torch.zeros(7, 7)
+    confusion_matrix = torch.zeros(8, 8)
+    test_dataset = EmoDataset(config, 
+                               metadata_file_test, 
+                               data_dir, 
+                               transform, 
+                               device, 
+                               random_sample=True, 
+                               model_name=model_name)
 
-    for song_index in tqdm(range(len(metadata))):
 
-        filepath = metadata.filepath[song_index]
-        label = metadata.emotion[song_index]
+    for wav_index in tqdm(range(len(metadata))):
+
+        filepath = metadata.filepath[wav_index]
+        label = metadata.emotion[wav_index]
         label_int = class_mapping_emo[label]
-        audio_path = filepath
-        signal, sr = torchaudio.load(audio_path, normalize=True)
-        if signal.size(0) > 1:
-            signal = torch.mean(signal, dim=0, keepdim=True)  # convert to mono
-        signal = signal.to(device)
-
-        if sr != target_sr:
-            signal = torchaudio.transforms.Resample(sr, target_sr)(signal)
-
-        # normalize the signal (peak normalization)
-        mean = signal.mean(dim=1, keepdim=True)
-        peak = torch.max(torch.max(signal), torch.min(signal))
-        signal = (signal - mean) / (1e-10 + peak)
-
-        len_sig = signal.size(1)
-        if len_sig < n_samples:
-            signal = torch.nn.functional.pad(signal, (0, n_samples - len_sig))
-        else:
-            signal = signal[:, :n_samples]
-
-        signal_data = signal.unsqueeze(0)
-        signal_data = transformation(signal_data)
+        audio_path = os.path.join(data_dir, filepath)
+        signal_data = test_dataset._get_item_from_path(audio_path)
+        signal_data = signal_data.unsqueeze(0)
 
         with torch.no_grad():
             prediction = model(signal_data)
@@ -101,8 +87,8 @@ def evaluate_model(model,
     im = ax.imshow(confusion_matrix, cmap="viridis")
 
     # Show all ticks and label them with the respective list entries
-    ax.set_xticks(torch.arange(7))
-    ax.set_yticks(torch.arange(7))
+    ax.set_xticks(torch.arange(8))
+    ax.set_yticks(torch.arange(8))
     ax.set_xticklabels(class_mapping_emo.keys())
     ax.set_yticklabels(class_mapping_emo.keys())
 
@@ -111,8 +97,8 @@ def evaluate_model(model,
              rotation_mode="anchor")
     
     # Loop over data dimensions and create text annotations.
-    for i in range(7):
-        for j in range(7):
+    for i in range(8):
+        for j in range(8):
             text = ax.text(j, i, int(confusion_matrix[i, j].item()),
                         ha="center", va="center", color="w")
 
@@ -130,8 +116,8 @@ def evaluate_model(model,
 
 if __name__ == "__main__":
 
-    # test model: emorec/20250403-184723
-    # test model: emorec/20250403-185500
+    # test model: emorec/20250411-163737
+    # test model: emorec/20250411-164740
 
     # Parse arguments
     parser = argparse.ArgumentParser()
@@ -158,7 +144,9 @@ if __name__ == "__main__":
     filters = config["filters"]
     add_dropout = config["add_dropout"]
     model_name = config["model_name"]
-    metadata_file_test = "data/test_metadata_emo.csv"
+    metadata_file_test = "data/test_metadata_emo_new.csv"
+    pretrained = False
+    fine_tune = False
 
     
     if config["n_frames"] is not None:
@@ -194,17 +182,14 @@ if __name__ == "__main__":
     
     # Define model
 
-    if model_name == "CNN_Network":
-        raise NotImplementedError("CNN_Network is not implemented")
-    elif model_name == "MusicRecNet":
+    if model_name == "MusicRecNet":
         model = MusicRecNet(n_mels=n_mels, n_frames=n_frames, filters=filters, add_dropout=add_dropout).to(device)
-    elif model_name == "CNN_new":
-        raise NotImplementedError("CNN_new is not implemented")
     else:
-        raise ValueError("Model not found")
+        model = get_model(model_name, num_classes=8, pretrained=pretrained, fine_tune=fine_tune).to(device)
+        model.to(device)
     
     model.load_state_dict(torch.load(os.path.join("trained", model_dir, "model.pth")))
 
     print(f'model name: {model_name}')
 
-    evaluate_model(model, model_dir, metadata_file_test, config, transformation, transform, device, show_matrix=True)
+    evaluate_model(model, model_dir, metadata_file_test, config, show_matrix=True)

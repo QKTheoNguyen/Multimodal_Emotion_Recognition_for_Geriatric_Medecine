@@ -7,7 +7,7 @@ import argparse
 from tqdm import tqdm
 from torch import nn
 from torch.utils.data import DataLoader
-# tensorboard --logdir "C:\Users\quang\Desktop\Deep Learning Project"
+# tensorboard --logdir "/home/tnguyen/Documents/Emotion_recognition/Multimodal_Emotion_Recognition_for_Geriatric_Medecine"
 from torch.utils.tensorboard import SummaryWriter
 from data import EmoDataset
 from model import *
@@ -34,7 +34,7 @@ def train(model, train_loader, valid_loader, config, loss_fn, optimizer, device,
         print(f"Train Loss: {train_loss}, Validation Loss: {valid_loss}, Validation Accuracy: {valid_accuracy}")
 
         if epoch == 0:
-            early_stopping = EarlyStopping(patience=16)
+            early_stopping = EarlyStopping(patience=21)
             reduce_lr = ReduceLROnPlateau(factor=0.1, patience=5)
             tensorboard = TensorBoard(log_dir=log_dir, config=config)
             if not os.path.exists(log_dir):

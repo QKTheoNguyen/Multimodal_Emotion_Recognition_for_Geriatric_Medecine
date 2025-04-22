@@ -7,11 +7,21 @@ import argparse
 from tqdm import tqdm
 from torch import nn
 from torch.utils.data import DataLoader
-# tensorboard --logdir "C:\Users\quang\Desktop\Deep Learning Project"
+# tensorboard --logdir "/home/tnguyen/Documents/Emotion_recognition/Multimodal_Emotion_Recognition_for_Geriatric_Medecine"
 from data import EmoDataset
 from model import *
 from train import train, load_config
 
+def get_optimizer(optimizer_name, model, lr):
+
+    if optimizer_name == "adam":
+        return torch.optim.Adam(model.parameters(), lr=lr)
+    elif optimizer_name == "sgd":
+        return torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    elif optimizer_name == "adadelta":
+        return torch.optim.Adadelta(model.parameters(), lr=lr)
+    else:
+        raise ValueError("Optimizer not found")
 
 if __name__ == "__main__":
 
@@ -52,6 +62,16 @@ if __name__ == "__main__":
     filters = config["filters"]
     add_dropout = config["add_dropout"]
     model_name = config["model_name"]
+    training = config["training"]
+    if training == "untrained":
+        pretrained = False
+        fine_tune = False
+    elif training == "finetuned":
+        pretrained = True
+        fine_tune = True
+    elif training == "frozen":
+        pretrained = True
+        fine_tune = False
 
     if config["n_frames"] is not None:
         n_frames = config["n_frames"]
@@ -65,17 +85,21 @@ if __name__ == "__main__":
     # Define loss function, model and optimizer
     loss_fn = nn.CrossEntropyLoss()
 
-    if model_name == "CNN_Network":
-        raise NotImplementedError("CNN_Network is not implemented yet")
-    elif model_name == "MusicRecNet":
+    # if model_name == "AlexNet":
+    #     model = AlexNet(num_classes=7, pretrained=True).to(device)
+    # elif model_name == "MusicRecNet":
+    #     model = MusicRecNet(n_mels=n_mels, n_frames=n_frames, filters=filters, add_dropout=add_dropout).to(device)
+    # elif model_name == "CNN_new":
+    #     raise NotImplementedError("CNN_new is not implemented yet")
+    # else:
+    #     raise ValueError("Model not found")
+    if model_name == "MusicRecNet":
         model = MusicRecNet(n_mels=n_mels, n_frames=n_frames, filters=filters, add_dropout=add_dropout).to(device)
-    elif model_name == "CNN_new":
-        raise NotImplementedError("CNN_new is not implemented yet")
     else:
-        raise ValueError("Model not found")
+        model = get_model(model_name, num_classes=8, pretrained=pretrained, fine_tune=fine_tune).to(device)
+        model.to(device)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    # optimizer = torch.optim.Adadelta(model.parameters(), lr=lr)
+    optimizer = get_optimizer(config["optimizer"], model, lr)
 
     # Create train and validation datasets and dataloaders
     train_dataset = EmoDataset(config, metadata_file_train, data_dir, transform, device, random_sample=True, model_name=model_name)

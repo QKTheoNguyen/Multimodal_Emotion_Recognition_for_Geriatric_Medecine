@@ -18,7 +18,8 @@ class_mapping_emo = {
     'fear': 3,
     'disgust': 4,
     'surprise': 5,
-    'neutral': 6
+    'neutral': 6,
+    'boredom': 7,
 }
 
 class EmoDataset(Dataset):
@@ -35,6 +36,8 @@ class EmoDataset(Dataset):
         self.hop_length = self.config["hop_length"]
         self.target_sr = self.config["target_sr"]
         self.full_audio_length = self.config["full_audio_length"]
+        self.augmentation = self.config["augmentation"]
+        self.RCS = self.config["RCS"]
         self.transform = transform
         
         if self.config["n_frames"] is not None and self.config["duration"] is not None:
@@ -48,7 +51,7 @@ class EmoDataset(Dataset):
             self.n_samples = self.duration * self.target_sr
             self.n_frames = 1 + (self.n_samples - self.n_fft) // self.hop_length
 
-        if self.model_name == "AlexNet":
+        if self.model_name != "MusicRecNet":
             self.n_mels = 227
             self.n_frames = 227
             self.n_freq = 227
@@ -68,16 +71,21 @@ class EmoDataset(Dataset):
 
         label = self.metadata.iloc[index].emotion
         label_int = class_mapping_emo[label]
-        audio_path = self.metadata.iloc[index].filepath
+        # audio_path = self.metadata.iloc[index].filepath
+        audio_path = os.path.join(self.data_dir, self.metadata.iloc[index].filepath)
         signal, sr = torchaudio.load(audio_path, normalize=True)
         if signal.size(0) > 1:
             signal = torch.mean(signal, dim=0, keepdim=True)  # convert to mono
         signal = signal.to(self.device)
+
+        if self.augmentation:
+            signal = self._augment(signal)
+
         if self.full_audio_length:
             onset = self.metadata.iloc[index].onset
             offset = self.metadata.iloc[index].offset
         if sr != self.target_sr:
-            signal = torchaudio.transforms.Resample(sr, self.target_sr)(signal)
+            signal = torchaudio.transforms.Resample(sr, self.target_sr).to(self.device)(signal)
 
         if signal.size(1) != self.n_samples and not self.full_audio_length:
             signal = self._reshape_signal(signal, random_sample=self.random_sample)
@@ -94,23 +102,13 @@ class EmoDataset(Dataset):
 
         signal = self.transformation(signal)
 
-        if self.transform == "mel_spectrogram" or self.transform == "mfcc":
-
-            ## normalize the output
-
-            ## normal distribution
-            mean = signal.mean(dim=2, keepdim=True)
-            stdev = signal.std(dim=2, keepdim=True)
-            signal = (signal - mean) / (stdev + 1e-10) 
-
-            ## log normalization
-            # signal = torch.log(signal)
+        if self.model_name != "MusicRecNet":
+            signal = self._Delta_channels(signal)
         
-        elif self.transform == "spectrogram":
-            signal = torchaudio.transforms.AmplitudeToDB(stype='magnitude', top_db=80)(signal)
+        signal = self._normalize(signal)
 
-        elif self.transform == "power_spectrogram":
-            signal = torchaudio.transforms.AmplitudeToDB(stype='power', top_db=80)(signal)
+        if self.RCS != 0:
+            signal = self._RCS(signal, self.RCS)
 
         return signal, label_int
     
@@ -156,7 +154,75 @@ class EmoDataset(Dataset):
                                                                     "normalized": False,
                                                                     "center": False})
         return transformation.to(self.device)
+    
+    def _augment(self, signal):
 
+        #TODO: add augmentation
+
+        return signal
+    
+    def _RCS(self, signal, RCS):
+
+        #TODO: add RCS
+
+        return signal
+    
+    def _normalize(self, signal):
+
+        if self.transform == "mel_spectrogram" or self.transform == "mfcc":
+
+            ## normal distribution
+            mean = signal.mean(dim=2, keepdim=True)
+            stdev = signal.std(dim=2, keepdim=True)
+            signal = (signal - mean) / (stdev + 1e-10) 
+
+            ## log normalization
+            # signal = torch.log(signal)
+        
+        elif self.transform == "spectrogram" or self.transform == "power_spectrogram":
+            signal = torchaudio.transforms.AmplitudeToDB(stype='magnitude', top_db=80)(signal)
+
+            for i in range(signal.shape[0]):
+                channel = signal[i]
+
+                ## Normalize each channel to the range [0, 1]
+                min_val = torch.min(channel)
+                max_val = torch.max(channel)
+                signal[i] = (channel - min_val) / (max_val - min_val + 1e-8)  # Add epsilon to avoid division by zero
+            
+            # to integer
+            signal = torch.round(signal * 255)
+
+        return signal
+    
+    def _Delta_channels(self, signal):
+        delta = torchaudio.transforms.ComputeDeltas()(signal)
+        delta_delta = torchaudio.transforms.ComputeDeltas()(delta)
+        signal = torch.cat((signal, delta, delta_delta), dim=0)
+        return signal
+    
+    def _get_item_from_path(self, audio_path):
+        signal, sr = torchaudio.load(audio_path, normalize=True)
+        if signal.size(0) > 1:
+            signal = torch.mean(signal, dim=0, keepdim=True)
+        signal = signal.to(self.device)
+        if sr != self.target_sr:
+            signal = torchaudio.transforms.Resample(sr, self.target_sr).to(self.device)(signal)
+        if signal.size(1) != self.n_samples and not self.full_audio_length:
+            signal = self._reshape_signal(signal, random_sample=False)
+        if self.full_audio_length:
+            signal = signal[:, self.onset:self.offset]
+            if signal.size(1) < self.n_samples:
+                signal = torch.nn.functional.pad(signal, (0, self.n_samples - signal.size(1)))
+        # normalize the signal (peak normalization)
+        mean = signal.mean(dim=1, keepdim=True)
+        peak = torch.max(torch.max(signal), torch.min(signal))
+        signal = (signal - mean) / (1e-10 + peak)
+        signal = self.transformation(signal)
+        if self.model_name != "MusicRecNet":
+            signal = self._Delta_channels(signal)
+        signal = self._normalize(signal)
+        return signal
 
 if __name__ == "__main__":
 
@@ -179,7 +245,7 @@ if __name__ == "__main__":
         return config
 
     metadata_file = 'data/metadata_emo.csv'
-    data_dir = "data/EmoData"
+    data_dir = os.path.join("/home","tnguyen","Documents","Emotion_recognition","Multimodal_Emotion_Recognition_for_Geriatric_Medecine","data","EmoData")
     config_path = "config/emo_config.yaml"
     config = load_config(config_path)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -190,7 +256,7 @@ if __name__ == "__main__":
     n_frames = config["n_frames"] if args.n_frames is None else args.n_frames
     n_mels = config["n_mels"]
     transform = config["transform"] if args.transform is None else args.transform
-    model_name = args.model_name
+    model_name = config["model_name"] if args.model_name is None else args.model_name
 
 
     dataset = EmoDataset(config, metadata_file, data_dir, transform, device, random_sample=True, model_name=model_name)
@@ -206,3 +272,20 @@ if __name__ == "__main__":
     print(f"Target : {target}")
     print(f'Data min : {data.min()}, max : {data.max()}')
     print(f'Data mean : {data.mean()}, std : {data.std()}')
+
+    # save data to check
+    import matplotlib.pyplot as plt
+    import numpy as np
+    
+    data_test_path = "/home/tnguyen/Documents/Emotion_recognition/Multimodal_Emotion_Recognition_for_Geriatric_Medecine/data/test_data"
+
+    for i in range(data.size(0)):
+        plt.imshow(data[i,1].cpu().numpy(), cmap='viridis', aspect='auto')
+        plt.colorbar()
+        plt.xlabel('Time')
+        plt.ylabel('Frequency')
+        plt.gca().invert_yaxis()
+        plt.title(f'Target : {target[i]}')
+        plt.savefig(os.path.join(data_test_path, f'test_{i}.png'))
+        plt.axis('off')
+        plt.close()
