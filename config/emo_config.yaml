@@ -1,9 +1,9 @@
 add_dropout: true
-batch_size: 128
+batch_size: 64
 data_dir: /home/tnguyen/Documents/Emotion_recognition/Multimodal_Emotion_Recognition_for_Geriatric_Medecine/data/EmoData
 device: cuda
 duration: 3
-epochs: 100
+epochs: 150
 filters:
 - 32
 - 64
@@ -11,9 +11,7 @@ filters:
 full_audio_length: false
 hop_length: 512
 learning_rate: 0.001
-metadata_file_train: /home/tnguyen/Documents/Emotion_recognition/Multimodal_Emotion_Recognition_for_Geriatric_Medecine/data/train_metadata_emo_new.csv
-metadata_file_valid: /home/tnguyen/Documents/Emotion_recognition/Multimodal_Emotion_Recognition_for_Geriatric_Medecine/data/val_metadata_emo_new.csv
-model_name: vgg11_bn
+model_name: resnet18
 n_fft: 2048
 n_frames: null
 n_mels: 16
@@ -21,6 +19,7 @@ target_sr: 22050
 transform: spectrogram
 verbose: false
 training: finetuned
-optimizer: 'adam'
+optimizer: adam
 augmentation: false
 RCS: 0
+database: enterface

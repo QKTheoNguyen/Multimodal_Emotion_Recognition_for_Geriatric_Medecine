@@ -11,19 +11,48 @@ class_mapping = {
     'Expert': 3
 }
 
+# class_mapping_emo = {
+#     'joy': 0,
+#     'sadness': 1,
+#     'anger': 2,
+#     'fear': 3,
+#     'disgust': 4,
+#     'surprise': 5,
+#     'neutral': 6,
+#     'boredom': 7,
+# }
+
 class_mapping_emo = {
-    'joy': 0,
-    'sadness': 1,
-    'anger': 2,
-    'fear': 3,
-    'disgust': 4,
-    'surprise': 5,
-    'neutral': 6,
-    'boredom': 7,
+    'enterface': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+    },
+    'emodb': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'neutral': 5,
+        'boredom': 6,
+    },
+    'oreau': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+        'neutral': 6,
+    }
 }
 
 class EmoDataset(Dataset):
-    def __init__(self, config, metadata_file, data_dir, transform, device, random_sample, model_name):
+    def __init__(self, config, metadata_file, data_dir, transform, device, random_sample, model_name, mode):
         self.metadata = pd.read_csv(metadata_file)
         self.config = config
         self.data_dir = data_dir
@@ -38,7 +67,9 @@ class EmoDataset(Dataset):
         self.full_audio_length = self.config["full_audio_length"]
         self.augmentation = self.config["augmentation"]
         self.RCS = self.config["RCS"]
+        self.database = self.config["database"]
         self.transform = transform
+        self.mode = mode
         
         if self.config["n_frames"] is not None and self.config["duration"] is not None:
             raise ValueError("You can't specify both n_frames and duration")
@@ -70,7 +101,7 @@ class EmoDataset(Dataset):
     def __getitem__(self, index):
 
         label = self.metadata.iloc[index].emotion
-        label_int = class_mapping_emo[label]
+        label_int = class_mapping_emo[self.database][label]
         # audio_path = self.metadata.iloc[index].filepath
         audio_path = os.path.join(self.data_dir, self.metadata.iloc[index].filepath)
         signal, sr = torchaudio.load(audio_path, normalize=True)
@@ -107,7 +138,7 @@ class EmoDataset(Dataset):
         
         signal = self._normalize(signal)
 
-        if self.RCS != 0:
+        if self.RCS != 0 and self.mode == "train":
             signal = self._RCS(signal, self.RCS)
 
         return signal, label_int
@@ -133,6 +164,15 @@ class EmoDataset(Dataset):
                                                                 n_mels=self.n_mels,
                                                                 normalized=False,
                                                                 center=False)
+        elif self.transform == "log_mel_spectrogram":
+            transformation = torchaudio.transforms.MelSpectrogram(sample_rate=self.target_sr,
+                                                                n_fft=self.n_fft,
+                                                                hop_length=self.hop_length,
+                                                                n_mels=self.n_mels,
+                                                                normalized=False,
+                                                                center=False)
+            transformation = torchaudio.transforms.AmplitudeToDB(stype='magnitude', top_db=80)(transformation)
+
         elif self.transform == "spectrogram":
             transformation = torchaudio.transforms.Spectrogram(n_fft=self.n_fft, 
                                                             hop_length=self.hop_length, 
@@ -153,19 +193,33 @@ class EmoDataset(Dataset):
                                                                     "n_mels": self.n_mels,
                                                                     "normalized": False,
                                                                     "center": False})
+
         return transformation.to(self.device)
     
-    def _augment(self, signal):
+    def _augment(self, signal, noise_level_range=(0.005, 0.1)):
 
-        #TODO: add augmentation
+        p = 0.9
+        if torch.rand(1).item() > p:
+            return signal
+        else:
+            # Add random noise
+            noise_level = torch.FloatTensor(1).uniform_(*noise_level_range).item()
+            noise = torch.randn_like(signal, device=self.device) * noise_level
+            signal = signal + noise
 
         return signal
     
     def _RCS(self, signal, RCS):
 
-        #TODO: add RCS
-
-        return signal
+        C, F, T = signal.shape
+        shift = torch.randint(low=1, high=F-1, size=(RCS,))
+        shifted = torch.zeros((RCS, C, F, T), device=self.device)
+        for i in range(RCS):
+            s = shift[i]
+            shifted[i, :, :, s:] = signal[:, :, 0:T-s]
+            shifted[i, :, :, 0:s] = signal[:, :, T-s:]
+            
+        return shifted
     
     def _normalize(self, signal):
 
@@ -176,8 +230,6 @@ class EmoDataset(Dataset):
             stdev = signal.std(dim=2, keepdim=True)
             signal = (signal - mean) / (stdev + 1e-10) 
 
-            ## log normalization
-            # signal = torch.log(signal)
         
         elif self.transform == "spectrogram" or self.transform == "power_spectrogram":
             signal = torchaudio.transforms.AmplitudeToDB(stype='magnitude', top_db=80)(signal)
@@ -259,7 +311,7 @@ if __name__ == "__main__":
     model_name = config["model_name"] if args.model_name is None else args.model_name
 
 
-    dataset = EmoDataset(config, metadata_file, data_dir, transform, device, random_sample=True, model_name=model_name)
+    dataset = EmoDataset(config, metadata_file, data_dir, transform, device, random_sample=True, model_name=model_name, mode="train")
 
     train_loader = DataLoader(dataset=dataset, 
                             batch_size=5, 
@@ -273,19 +325,19 @@ if __name__ == "__main__":
     print(f'Data min : {data.min()}, max : {data.max()}')
     print(f'Data mean : {data.mean()}, std : {data.std()}')
 
-    # save data to check
-    import matplotlib.pyplot as plt
-    import numpy as np
+    # # save data to check
+    # import matplotlib.pyplot as plt
+    # import numpy as np
     
-    data_test_path = "/home/tnguyen/Documents/Emotion_recognition/Multimodal_Emotion_Recognition_for_Geriatric_Medecine/data/test_data"
+    # # data_test_path = "/home/tnguyen/Documents/Emotion_recognition/Multimodal_Emotion_Recognition_for_Geriatric_Medecine/data/test_data"
 
-    for i in range(data.size(0)):
-        plt.imshow(data[i,1].cpu().numpy(), cmap='viridis', aspect='auto')
-        plt.colorbar()
-        plt.xlabel('Time')
-        plt.ylabel('Frequency')
-        plt.gca().invert_yaxis()
-        plt.title(f'Target : {target[i]}')
-        plt.savefig(os.path.join(data_test_path, f'test_{i}.png'))
-        plt.axis('off')
-        plt.close()
+    # for i in range(data.size(0)):
+    #     plt.imshow(data[i,1].cpu().numpy(), cmap='viridis', aspect='auto')
+    #     plt.colorbar()
+    #     plt.xlabel('Time')
+    #     plt.ylabel('Frequency')
+    #     plt.gca().invert_yaxis()
+    #     plt.title(f'Target : {target[i]}')
+    #     plt.savefig(os.path.join(data_test_path, f'test_{i}.png'))
+    #     plt.axis('off')
+    #     plt.close()

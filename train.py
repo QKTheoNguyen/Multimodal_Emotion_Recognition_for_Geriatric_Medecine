@@ -34,7 +34,7 @@ def train(model, train_loader, valid_loader, config, loss_fn, optimizer, device,
         print(f"Train Loss: {train_loss}, Validation Loss: {valid_loss}, Validation Accuracy: {valid_accuracy}")
 
         if epoch == 0:
-            early_stopping = EarlyStopping(patience=21)
+            early_stopping = EarlyStopping(patience=20)
             reduce_lr = ReduceLROnPlateau(factor=0.1, patience=5)
             tensorboard = TensorBoard(log_dir=log_dir, config=config)
             if not os.path.exists(log_dir):
@@ -63,6 +63,11 @@ def train(model, train_loader, valid_loader, config, loss_fn, optimizer, device,
 def train_single_epoch(model, train_loader, loss_fn, optimizer, device, verbose=False):
     
     for (data, target) in tqdm(train_loader, leave=False, ncols=80):
+
+        if len(data.size()) == 5:
+            B, RCS, C, T, F = data.size()
+            data = data.reshape(B*RCS, C, T, F)
+            target = target.repeat_interleave(RCS)
 
         if verbose:
             print(f'data size: {data.size()}')
@@ -97,8 +102,6 @@ def validate_single_epoch(model, valid_loader, loss_fn, device, verbose=False):
             if verbose:
                 print(f'prediction: {prediction}')
                 print(f'target: {target}')
-
-            # import pdb; pdb.set_trace()
 
             loss = loss_fn(prediction, target)
             # print(f'loss: {loss.item()}')

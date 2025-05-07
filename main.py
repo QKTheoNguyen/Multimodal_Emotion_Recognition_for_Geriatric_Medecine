@@ -22,6 +22,43 @@ def get_optimizer(optimizer_name, model, lr):
         return torch.optim.Adadelta(model.parameters(), lr=lr)
     else:
         raise ValueError("Optimizer not found")
+    
+def get_metadata_filepath(database, data_dir, phase):
+    metadata_dir = data_dir[:-8]
+    metadata_filename = f"{phase}_metadata_emo_{database}.csv"
+    metadata_filepath = os.path.join(metadata_dir, metadata_filename)
+    print(f"Metadata file path: {metadata_filepath}")
+    return metadata_filepath
+
+class_mapping_emo = {
+    'enterface': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+    },
+    'emodb': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'neutral': 5,
+        'boredom': 6,
+    },
+    'oreau': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+        'neutral': 6,
+    }
+}
+    
 
 if __name__ == "__main__":
 
@@ -45,9 +82,11 @@ if __name__ == "__main__":
     config_path = args.config
     config = load_config(config_path)
 
-    metadata_file_train = config["metadata_file_train"]
-    metadata_file_valid = config["metadata_file_valid"]
     data_dir = config["data_dir"]
+    database = config["database"]
+    num_classes = len(class_mapping_emo[database])
+    metadata_file_train = get_metadata_filepath(database, data_dir, "train")
+    metadata_file_valid = get_metadata_filepath(database, data_dir, "val")
     target_sr = config["target_sr"]
     duration = config["duration"]
     epochs = args.epochs if args.epochs is not None else config["epochs"]
@@ -59,8 +98,6 @@ if __name__ == "__main__":
     hop_length = config["hop_length"]
     n_mels = config["n_mels"]
     n_frames = config["n_frames"]
-    filters = config["filters"]
-    add_dropout = config["add_dropout"]
     model_name = config["model_name"]
     training = config["training"]
     if training == "untrained":
@@ -85,29 +122,18 @@ if __name__ == "__main__":
     # Define loss function, model and optimizer
     loss_fn = nn.CrossEntropyLoss()
 
-    # if model_name == "AlexNet":
-    #     model = AlexNet(num_classes=7, pretrained=True).to(device)
-    # elif model_name == "MusicRecNet":
-    #     model = MusicRecNet(n_mels=n_mels, n_frames=n_frames, filters=filters, add_dropout=add_dropout).to(device)
-    # elif model_name == "CNN_new":
-    #     raise NotImplementedError("CNN_new is not implemented yet")
-    # else:
-    #     raise ValueError("Model not found")
-    if model_name == "MusicRecNet":
-        model = MusicRecNet(n_mels=n_mels, n_frames=n_frames, filters=filters, add_dropout=add_dropout).to(device)
-    else:
-        model = get_model(model_name, num_classes=8, pretrained=pretrained, fine_tune=fine_tune).to(device)
-        model.to(device)
+    model = get_model(model_name, num_classes=num_classes, pretrained=pretrained, fine_tune=fine_tune).to(device)
+    model.to(device)
 
     optimizer = get_optimizer(config["optimizer"], model, lr)
 
     # Create train and validation datasets and dataloaders
-    train_dataset = EmoDataset(config, metadata_file_train, data_dir, transform, device, random_sample=True, model_name=model_name)
+    train_dataset = EmoDataset(config, metadata_file_train, data_dir, transform, device, random_sample=True, model_name=model_name, mode='train')
     train_loader = DataLoader(dataset=train_dataset, 
                               batch_size=batch_size, 
                               shuffle=True)
     
-    valid_dataset = EmoDataset(config, metadata_file_valid, data_dir, transform, device, random_sample=True, model_name=model_name)
+    valid_dataset = EmoDataset(config, metadata_file_valid, data_dir, transform, device, random_sample=True, model_name=model_name, mode='val')
     valid_loader = DataLoader(dataset=valid_dataset, 
                               batch_size=batch_size, 
                               shuffle=False)

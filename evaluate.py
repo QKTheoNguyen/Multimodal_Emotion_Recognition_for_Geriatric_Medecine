@@ -6,10 +6,12 @@ import datetime
 import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 from tqdm import tqdm
 from model import *
 from torch.utils.data import DataLoader
 from data import *
+from main import get_metadata_filepath
 # from data import EmoDataset
 
 class_mapping = {
@@ -19,15 +21,44 @@ class_mapping = {
     'Expert': 3
 }
 
+# class_mapping_emo = {
+#     'joy': 0,
+#     'sadness': 1,
+#     'anger': 2,
+#     'fear': 3,
+#     'disgust': 4,
+#     'surprise': 5,
+#     'neutral': 6,
+#     'boredom': 7,
+# }
+
 class_mapping_emo = {
-    'joy': 0,
-    'sadness': 1,
-    'anger': 2,
-    'fear': 3,
-    'disgust': 4,
-    'surprise': 5,
-    'neutral': 6,
-    'boredom': 7,
+    'enterface': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+    },
+    'emodb': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'neutral': 5,
+        'boredom': 6,
+    },
+    'oreau': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+        'neutral': 6,
+    }
 }
 
 def load_config(config_path):
@@ -39,7 +70,9 @@ def evaluate_model(model,
                    model_dir,
                    metadata_file_test, 
                    config,
-                   show_matrix=False):
+                   show_matrix=False,
+                   database=None,
+                   num_classes=8):
     
     model.eval()
 
@@ -48,21 +81,22 @@ def evaluate_model(model,
     metadata = pd.read_csv(metadata_file_test)
     data_dir = config["data_dir"]
     correct = 0
-    confusion_matrix = torch.zeros(8, 8)
+    confusion_matrix = torch.zeros(num_classes, num_classes)
     test_dataset = EmoDataset(config, 
                                metadata_file_test, 
                                data_dir, 
                                transform, 
                                device, 
                                random_sample=True, 
-                               model_name=model_name)
+                               model_name=model_name,
+                               mode="test")
 
 
     for wav_index in tqdm(range(len(metadata))):
 
         filepath = metadata.filepath[wav_index]
         label = metadata.emotion[wav_index]
-        label_int = class_mapping_emo[label]
+        label_int = class_mapping_emo[database][label]
         audio_path = os.path.join(data_dir, filepath)
         signal_data = test_dataset._get_item_from_path(audio_path)
         signal_data = signal_data.unsqueeze(0)
@@ -80,29 +114,38 @@ def evaluate_model(model,
 
     accuracy = correct / len(metadata)
 
+    # Normalize confusion matrix in percentage over each row
+    confusion_matrix = confusion_matrix / confusion_matrix.sum(axis=1, keepdims=True)
+    confusion_matrix = confusion_matrix * 100
+
     print(f'Accuracy of the network on the test songs: {accuracy:.3f}')
 
     ### Plot confusion matrix ###
     fig, ax = plt.subplots()
     im = ax.imshow(confusion_matrix, cmap="viridis")
 
+    # Set labels
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("True")
+
     # Show all ticks and label them with the respective list entries
-    ax.set_xticks(torch.arange(8))
-    ax.set_yticks(torch.arange(8))
-    ax.set_xticklabels(class_mapping_emo.keys())
-    ax.set_yticklabels(class_mapping_emo.keys())
+    ax.set_xticks(torch.arange(num_classes))
+    ax.set_yticks(torch.arange(num_classes))
+    ax.set_xticklabels(class_mapping_emo[database].keys())
+    ax.set_yticklabels(class_mapping_emo[database].keys())
 
     # Rotate the tick labels and set their alignment.
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
              rotation_mode="anchor")
     
     # Loop over data dimensions and create text annotations.
-    for i in range(8):
-        for j in range(8):
-            text = ax.text(j, i, int(confusion_matrix[i, j].item()),
+    for i in range(num_classes):
+        for j in range(num_classes):
+            text = ax.text(j, i, round(confusion_matrix[i, j].item(), 1),
                         ha="center", va="center", color="w")
 
-    ax.set_title(f"Model confusion matrix, Accuracy: {accuracy:.3f}")
+    ax.set_title(f"{model_name} on {database} - Accuracy: {accuracy:.3f}")
+    
     fig.tight_layout()
     if show_matrix:
         plt.show()
@@ -144,7 +187,9 @@ if __name__ == "__main__":
     filters = config["filters"]
     add_dropout = config["add_dropout"]
     model_name = config["model_name"]
-    metadata_file_test = "data/test_metadata_emo_new.csv"
+    database = config["database"]
+    num_classes = len(class_mapping_emo[database])
+    metadata_file_test = f"data/test_metadata_emo_{database}.csv"
     pretrained = False
     fine_tune = False
 
@@ -182,14 +227,11 @@ if __name__ == "__main__":
     
     # Define model
 
-    if model_name == "MusicRecNet":
-        model = MusicRecNet(n_mels=n_mels, n_frames=n_frames, filters=filters, add_dropout=add_dropout).to(device)
-    else:
-        model = get_model(model_name, num_classes=8, pretrained=pretrained, fine_tune=fine_tune).to(device)
-        model.to(device)
+    model = get_model(model_name, num_classes=num_classes, pretrained=pretrained, fine_tune=fine_tune).to(device)
+    model.to(device)
     
     model.load_state_dict(torch.load(os.path.join("trained", model_dir, "model.pth")))
 
     print(f'model name: {model_name}')
 
-    evaluate_model(model, model_dir, metadata_file_test, config, show_matrix=True)
+    evaluate_model(model, model_dir, metadata_file_test, config, show_matrix=True, database=database, num_classes=num_classes)

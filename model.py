@@ -73,7 +73,17 @@ def get_model(model_name, num_classes, pretrained, fine_tune):
     if model_name == 'alexnet':
         model = AlexNet(num_classes=num_classes, pretrained=pretrained, fine_tune=fine_tune)
 
+    elif model_name == "resnet50_torchvision_models":
+        model = models.resnet50(weights="DEFAULT" if pretrained else None)
+        if not (fine_tune and pretrained):
+            for param in model.parameters():
+                param.requires_grad = False
+        model.fc = nn.Linear(model.fc.in_features, num_classes)
+
     elif model_name in timm.list_models():
+        
+        if model_name.startswith('resnet') or model_name.startswith('resnext'):
+            model_name = model_name + '.tv_in1k'
         model = timm.create_model(model_name, pretrained=pretrained, num_classes=num_classes)
 
         if not fine_tune:
@@ -90,20 +100,6 @@ def get_model(model_name, num_classes, pretrained, fine_tune):
     return model
 
 if __name__ == "__main__":
-    
-    # n_mels = 16
-    # n_samples = 3 * 22050
-    # n_frames = 1 + (n_samples - 2048) // 512
-    # print(f'n_frames : {n_frames}, n_samples : {n_samples}, n_mels : {n_mels}')
-    # model_RecNet = MusicRecNet(n_mels=n_mels, n_frames=n_frames, filters=[32, 64, 128])
-    # summary(model_RecNet, (1, n_mels, n_frames))
-
-    # print(f'----- MusicRecNet model -----')
-    # x = torch.randn(32, 1, n_mels, n_frames)
-    # y = model_RecNet(x)
-    # print(f'Input : {x.size()}')
-    # print(f'Output : {y.size()}')
-    #
 
     model_name = 'vgg13_bn'
     print(f'----- {model_name} model -----')
