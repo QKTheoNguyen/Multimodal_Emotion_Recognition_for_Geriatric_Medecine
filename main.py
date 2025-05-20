@@ -8,7 +8,7 @@ from tqdm import tqdm
 from torch import nn
 from torch.utils.data import DataLoader
 # tensorboard --logdir "/home/tnguyen/Documents/Emotion_recognition/Multimodal_Emotion_Recognition_for_Geriatric_Medecine"
-from data import EmoDataset
+from data import EmoDataset, EmoDataset_Wav2Vec2
 from model import *
 from train import train, load_config
 
@@ -127,16 +127,37 @@ if __name__ == "__main__":
 
     optimizer = get_optimizer(config["optimizer"], model, lr)
 
-    # Create train and validation datasets and dataloaders
-    train_dataset = EmoDataset(config, metadata_file_train, data_dir, transform, device, random_sample=True, model_name=model_name, mode='train')
-    train_loader = DataLoader(dataset=train_dataset, 
-                              batch_size=batch_size, 
-                              shuffle=True)
-    
-    valid_dataset = EmoDataset(config, metadata_file_valid, data_dir, transform, device, random_sample=True, model_name=model_name, mode='val')
-    valid_loader = DataLoader(dataset=valid_dataset, 
-                              batch_size=batch_size, 
-                              shuffle=False)
-    
-    # Train the model
-    train(model, train_loader, valid_loader, config, loss_fn, optimizer, device, epochs, verbose)
+    if model_name != "wav2vec2":
+        ### CNNs
+
+        # Create train and validation datasets and dataloaders
+        train_dataset = EmoDataset(config, metadata_file_train, data_dir, transform, device, random_sample=True, model_name=model_name, mode='train')
+        train_loader = DataLoader(dataset=train_dataset, 
+                                batch_size=batch_size, 
+                                shuffle=True)
+        
+        valid_dataset = EmoDataset(config, metadata_file_valid, data_dir, transform, device, random_sample=True, model_name=model_name, mode='val')
+        valid_loader = DataLoader(dataset=valid_dataset, 
+                                batch_size=batch_size, 
+                                shuffle=False)
+        
+        # Train the model
+        train(model, train_loader, valid_loader, config, loss_fn, optimizer, device, epochs, verbose)
+
+    else:
+            
+        ### Wav2Vec2
+
+        # Create train and validation datasets and dataloaders
+        train_dataset = EmoDataset_Wav2Vec2(config, metadata_file_train, data_dir, device, random_sample=True, model_name=model_name, mode='train', wav2vec2_path=config["wav2vec2_path"])
+        train_loader = DataLoader(dataset=train_dataset, 
+                                batch_size=batch_size, 
+                                shuffle=True)
+        
+        valid_dataset = EmoDataset_Wav2Vec2(config, metadata_file_valid, data_dir, device, random_sample=True, model_name=model_name, mode='val', wav2vec2_path=config["wav2vec2_path"])
+        valid_loader = DataLoader(dataset=valid_dataset, 
+                                batch_size=batch_size, 
+                                shuffle=False)
+        
+        # Train the model
+        train(model, train_loader, valid_loader, config, loss_fn, optimizer, device, epochs, verbose)

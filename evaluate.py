@@ -12,7 +12,6 @@ from model import *
 from torch.utils.data import DataLoader
 from data import *
 from main import get_metadata_filepath
-# from data import EmoDataset
 
 class_mapping = {
     'Untrained': 0,
@@ -80,17 +79,32 @@ def evaluate_model(model,
 
     metadata = pd.read_csv(metadata_file_test)
     data_dir = config["data_dir"]
+    model_name = config["model_name"]
+    wav2vec2_path = config["wav2vec2_path"]
     correct = 0
     confusion_matrix = torch.zeros(num_classes, num_classes)
-    test_dataset = EmoDataset(config, 
-                               metadata_file_test, 
-                               data_dir, 
-                               transform, 
-                               device, 
-                               random_sample=True, 
-                               model_name=model_name,
-                               mode="test")
 
+    if model_name != "wav2vec2":
+        test_dataset = EmoDataset(config, 
+                            metadata_file_test, 
+                            data_dir, 
+                            transform, 
+                            device, 
+                            random_sample=False, 
+                            model_name=model_name,
+                            mode="test")
+        
+    else:
+        test_dataset = EmoDataset_Wav2Vec2(config,
+                                             metadata_file_test, 
+                                             data_dir, 
+                                             device, 
+                                             random_sample=False, 
+                                             model_name=model_name,
+                                             mode="test",
+                                             wav2vec2_path=wav2vec2_path)
+
+    RCS = config["RCS"]
 
     for wav_index in tqdm(range(len(metadata))):
 
@@ -144,6 +158,7 @@ def evaluate_model(model,
             text = ax.text(j, i, round(confusion_matrix[i, j].item(), 1),
                         ha="center", va="center", color="w")
 
+    # ax.set_title(f"{model_name} on {database}, RCS {RCS} - Accuracy: {accuracy:.3f}")
     ax.set_title(f"{model_name} on {database} - Accuracy: {accuracy:.3f}")
     
     fig.tight_layout()
