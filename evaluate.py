@@ -57,6 +57,34 @@ class_mapping_emo = {
         'disgust': 4,
         'surprise': 5,
         'neutral': 6,
+    },
+    'french': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+        'neutral': 6,
+    },
+    'cafe': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+        'neutral': 6,
+    },
+    'ravdess': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+        'neutral': 6,
+        'calm': 7
     }
 }
 
@@ -84,7 +112,7 @@ def evaluate_model(model,
     correct = 0
     confusion_matrix = torch.zeros(num_classes, num_classes)
 
-    if model_name != "wav2vec2":
+    if model_name not in ["wav2vec2", "hubert", "wavlm", "whisper-base", "whisper-tiny"]:        
         test_dataset = EmoDataset(config, 
                             metadata_file_test, 
                             data_dir, 
@@ -199,12 +227,12 @@ if __name__ == "__main__":
     hop_length = config["hop_length"]
     n_mels = config["n_mels"]
     n_frames = config["n_frames"]
-    filters = config["filters"]
     add_dropout = config["add_dropout"]
     model_name = config["model_name"]
     database = config["database"]
     num_classes = len(class_mapping_emo[database])
-    metadata_file_test = f"data/test_metadata_emo_{database}.csv"
+    # database = 'oreau'
+    metadata_file_test = get_metadata_filepath(database, data_dir, "test")
     pretrained = False
     fine_tune = False
 

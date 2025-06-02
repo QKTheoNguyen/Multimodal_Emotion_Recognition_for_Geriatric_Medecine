@@ -3,7 +3,7 @@ import torch
 import pandas as pd
 import torchaudio
 import os
-from transformers import Wav2Vec2Processor
+from transformers import Wav2Vec2Processor, WhisperProcessor
 
 class_mapping = {
     'Untrained': 0,
@@ -38,6 +38,34 @@ class_mapping_emo = {
         'disgust': 4,
         'surprise': 5,
         'neutral': 6,
+    },
+    'french': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+        'neutral': 6,
+    },
+    'cafe': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+        'neutral': 6,
+    },
+    'ravdess': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+        'neutral': 6,
+        'calm': 7
     }
 }
 
@@ -284,10 +312,11 @@ class EmoDataset_Wav2Vec2(Dataset):
         self.random_sample = random_sample
         self.model_name = model_name
         self.mode = mode
-        if wav2vec2_path is not None:
-            self.processor = Wav2Vec2Processor.from_pretrained(wav2vec2_path)
-        else:
+
+        if self.model_name in ["wav2vec2", "hubert", "wavlm"]:
             self.processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h")
+        elif self.model_name in ["whisper-tiny", "whisper-base"]:
+            self.processor = WhisperProcessor.from_pretrained("openai/whisper-base")
 
         self.target_sr = self.config["target_sr"]
         self.full_audio_length = self.config["full_audio_length"]
@@ -321,14 +350,28 @@ class EmoDataset_Wav2Vec2(Dataset):
         if self.augmentation:
             signal = self._augment(signal)
 
-        inputs = self.processor(
-            signal,
-            sampling_rate=self.target_sr,
-            return_tensors="pt",
-            padding=False
-        )
+        if self.model_name in ["wav2vec2", "hubert", "wavlm"]:
+            
+            inputs = self.processor(
+                signal,
+                sampling_rate=self.target_sr,
+                return_tensors="pt",
+                padding=False
+            )
 
-        input_values = inputs.input_values.squeeze(0)
+            input_values = inputs.input_values.squeeze(0)
+        
+        elif self.model_name in ["whisper-tiny", "whisper-base"]:
+
+            signal = signal.cpu().numpy()  # Convert to numpy array for Whisper processor
+            inputs = self.processor(
+                audio=signal,
+                sampling_rate=self.target_sr,
+                return_tensors="pt",
+                padding=False
+            )
+            input_values = inputs.input_features.squeeze(0)
+            input_values = input_values.to(self.device)
 
         return input_values, label_int
     

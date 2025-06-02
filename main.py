@@ -24,7 +24,7 @@ def get_optimizer(optimizer_name, model, lr):
         raise ValueError("Optimizer not found")
     
 def get_metadata_filepath(database, data_dir, phase):
-    metadata_dir = data_dir[:-8]
+    metadata_dir = os.path.join(data_dir[:-8], "metadata_emo")
     metadata_filename = f"{phase}_metadata_emo_{database}.csv"
     metadata_filepath = os.path.join(metadata_dir, metadata_filename)
     print(f"Metadata file path: {metadata_filepath}")
@@ -56,6 +56,34 @@ class_mapping_emo = {
         'disgust': 4,
         'surprise': 5,
         'neutral': 6,
+    },
+    'french': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+        'neutral': 6,
+    },
+    'cafe': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+        'neutral': 6,
+    },
+    'ravdess': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+        'neutral': 6,
+        'calm': 7
     }
 }
     
@@ -127,7 +155,7 @@ if __name__ == "__main__":
 
     optimizer = get_optimizer(config["optimizer"], model, lr)
 
-    if model_name != "wav2vec2":
+    if model_name not in ["wav2vec2", "hubert", "wavlm", "whisper-base", "whisper-tiny"]:
         ### CNNs
 
         # Create train and validation datasets and dataloaders

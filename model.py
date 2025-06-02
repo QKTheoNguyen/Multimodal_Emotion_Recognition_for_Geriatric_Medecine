@@ -4,7 +4,9 @@ import timm
 from torch import nn
 from torchsummary import summary
 import torchinfo
-from transformers import Wav2Vec2ForSequenceClassification, Wav2Vec2Processor
+from transformers import Wav2Vec2ForSequenceClassification, HubertForSequenceClassification, WavLMForSequenceClassification, WhisperForAudioClassification
+# from s3prl.nn import S3PRLUpstream
+
 
 class MusicRecNet(nn.Module):
     def __init__(self, 
@@ -69,9 +71,9 @@ class AlexNet(nn.Module):
         return x
 
 class Wav2Vec2(nn.Module):
-    def __init__(self, num_classes=7, pretrained=True, fine_tune=True):
+    def __init__(self, num_classes=7, pretrained=True, fine_tune=True, pretrained_model_path=None):
         super(Wav2Vec2, self).__init__()
-        self.wav2vec2 = Wav2Vec2ForSequenceClassification.from_pretrained("facebook/wav2vec2-base", num_labels=num_classes)
+        self.wav2vec2 = Wav2Vec2ForSequenceClassification.from_pretrained(pretrained_model_path, num_labels=num_classes)
         if not (fine_tune and pretrained):
             for param in self.wav2vec2.parameters():
                 param.requires_grad = False
@@ -80,7 +82,41 @@ class Wav2Vec2(nn.Module):
         x = self.wav2vec2(x).logits
         return x
 
+class Hubert(nn.Module):
+    def __init__(self, num_classes=7, pretrained=True, fine_tune=True, pretrained_model_path=None):
+        super(Hubert, self).__init__()
+        self.hubert = HubertForSequenceClassification.from_pretrained(pretrained_model_path, num_labels=num_classes)
+        if not (fine_tune and pretrained):
+            for param in self.hubert.parameters():
+                param.requires_grad = False
+
+    def forward(self, x):
+        x = self.hubert(x).logits
+        return x
     
+class WavLM(nn.Module):
+    def __init__(self, num_classes=7, pretrained=True, fine_tune=True, pretrained_model_path=None):
+        super(WavLM, self).__init__()
+        self.wavlm = WavLMForSequenceClassification.from_pretrained(pretrained_model_path, num_labels=num_classes)
+        if not (fine_tune and pretrained):
+            for param in self.wavlm.parameters():
+                param.requires_grad = False
+
+    def forward(self, x):
+        x = self.wavlm(x).logits
+        return x
+    
+class Whisper(nn.Module):
+    def __init__(self, num_classes=7, pretrained=True, fine_tune=True, pretrained_model_path=None):
+        super(Whisper, self).__init__()
+        self.whisper = WhisperForAudioClassification.from_pretrained(pretrained_model_path, num_labels=num_classes)
+        if not (fine_tune and pretrained):
+            for param in self.whisper.parameters():
+                param.requires_grad = False
+
+    def forward(self, x):
+        x = self.whisper(x).logits
+        return x
 
     
 def get_model(model_name, num_classes, pretrained, fine_tune):
@@ -103,10 +139,24 @@ def get_model(model_name, num_classes, pretrained, fine_tune):
                     param.requires_grad = True
 
     elif model_name == 'wav2vec2':
-        model = Wav2Vec2(num_classes=num_classes, pretrained=pretrained, fine_tune=fine_tune)
+        model = Wav2Vec2(num_classes=num_classes, pretrained=pretrained, fine_tune=fine_tune, pretrained_model_path='facebook/wav2vec2-base')
+
+    elif model_name == 'hubert':
+        model = Hubert(num_classes=num_classes, pretrained=pretrained, fine_tune=fine_tune, pretrained_model_path='facebook/hubert-base-ls960')
+
+    elif model_name == 'wavlm':
+        model = WavLM(num_classes=num_classes, pretrained=pretrained, fine_tune=fine_tune, pretrained_model_path='microsoft/wavlm-base-plus')
+
+    elif model_name == 'whisper-base':
+        model = Whisper(num_classes=num_classes, pretrained=pretrained, fine_tune=fine_tune, pretrained_model_path='openai/whisper-base')
+
+    elif model_name == 'whisper-tiny':
+        model = Whisper(num_classes=num_classes, pretrained=pretrained, fine_tune=fine_tune, pretrained_model_path='openai/whisper-tiny')
 
     else:
         raise ValueError(f"Model {model_name} is not supported.")
+        # model = S3PRLUpstream(model_name)
+
 
     return model
 
