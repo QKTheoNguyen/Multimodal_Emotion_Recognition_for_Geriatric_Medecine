@@ -3,6 +3,8 @@ import yaml
 import warnings
 import torch
 import torchaudio
+import torchaudio.transforms as T
+import silero_vad
 from transformers import Wav2Vec2Processor, WhisperProcessor
 from model import *
 
@@ -165,7 +167,7 @@ def infer_long_audio(audio_path,
             else:
                 all_outputs = torch.cat((all_outputs, inferred_output), dim=0)
 
-    print(f"Processed {n_segments} segments from the audio file.")
+    print(f"[Emotion vector] Processed {n_segments} segments from the audio file.")
 
     if save_path:
         torch.save(all_outputs, save_path)
@@ -235,6 +237,100 @@ def infer_all_audio(data_dir,
                                     
     return
 
+def vad_infer(audio_path,
+              target_sr,
+              n_samples,
+              overlap,
+              device,
+              save_path):
+    
+    if not os.path.exists(audio_path):
+        raise FileNotFoundError(f"Audio file {audio_path} does not exist.")
+    
+    if not audio_path.endswith('.wav'):
+        raise ValueError("Only .wav files are supported for inference.")
+    
+    model = silero_vad.load_silero_vad()
+    signal, sr = torchaudio.load(audio_path)
+    if signal.shape[0] == 2:
+        signal = torch.mean(signal, dim=0, keepdim=True)
+    signal = signal.to(device)
+    if sr != target_sr:
+        signal = torchaudio.transforms.Resample(sr, target_sr).to(device)(signal)
+    signal = signal.squeeze(0)
+
+    len_signal = int(signal.size(0))
+    segment_hop = int(n_samples * (1 - overlap))
+    n_segments = (len_signal - n_samples) // segment_hop + 1
+
+    speech_timestamps = silero_vad.get_speech_timestamps(
+                        signal,
+                        model,
+                        threshold=0.4,
+                        return_seconds = False,
+                        sampling_rate = target_sr,
+                        min_silence_duration_ms = 500
+                        )
+
+    speech_activity = torch.zeros(signal.size()[0]//256, dtype=torch.int)
+    
+    for segment in speech_timestamps:
+        start_sample = segment['start']//256
+        end_sample = segment['end']//256
+        speech_activity[start_sample:end_sample] = 1
+    
+    for i in range(n_segments):
+        start = (i * segment_hop)//256
+        end = start + n_samples//256
+        segment = speech_activity[start:end]
+        if segment.size(0) < n_samples:
+            padding = n_samples - segment.size(0)
+            segment = torch.nn.functional.pad(segment, (0, padding))
+        segment_voice_activity = segment.sum() / (segment.size(0)//256)
+
+        if i == 0:
+            all_outputs = [segment_voice_activity]
+        else:
+            all_outputs.append(segment_voice_activity)
+
+    print(f"[VAD] Processed {n_segments} segments from the audio file.")
+
+    if save_path:
+        print(f"Saving outputs to {save_path}")
+        torch.save(all_outputs, save_path)
+
+    return all_outputs
+
+def vad_all_audio(data_dir,                  
+                  target_sr, 
+                  n_samples, 
+                  overlap,
+                  device):
+
+    our_dirs = ["Untrained", "Begginer", "Intermediate", "Expert"]
+
+    for dir in os.listdir(data_dir):
+        if dir in our_dirs:
+            dir_path = os.path.join(data_dir, dir)
+            for speaker in os.listdir(dir_path):
+                speaker_path = os.path.join(dir_path, speaker)
+                for task in os.listdir(speaker_path):
+                    task_path = os.path.join(speaker_path, task)
+                    for audio_file in os.listdir(task_path):
+                        if audio_file.endswith('.wav'):
+                            audio_path = os.path.join(task_path, audio_file)
+                            print(f"Processing {audio_path}...")
+                            save_path = audio_path.replace('.wav', '_vad.pt')
+                            output_data = vad_infer(
+                                audio_path=audio_path,
+                                target_sr=target_sr,
+                                n_samples=n_samples,
+                                overlap=overlap,
+                                device=device,
+                                save_path=save_path)
+                  
+    return
+
 if __name__ == "__main__":
 
     import argparse
@@ -254,7 +350,8 @@ if __name__ == "__main__":
     target_sr = config["target_sr"]
     n_samples = config["duration"] * target_sr
     model_name = config["model_name"]
-    # replace .wav with .png for image_path
+
+    # For emotion recognition inference
     infer_all_audio(
         data_dir=args.dir_path,
         model=model,
@@ -264,3 +361,13 @@ if __name__ == "__main__":
         model_name=model_name,
         device=device
     )
+
+    # For VAD inference
+    vad_all_audio(
+        data_dir=args.dir_path,
+        target_sr=target_sr,
+        n_samples=n_samples,
+        overlap=0.5,
+        device=device
+    )
+    print("Inference completed.")
