@@ -20,17 +20,6 @@ class_mapping = {
     'Expert': 3
 }
 
-# class_mapping_emo = {
-#     'joy': 0,
-#     'sadness': 1,
-#     'anger': 2,
-#     'fear': 3,
-#     'disgust': 4,
-#     'surprise': 5,
-#     'neutral': 6,
-#     'boredom': 7,
-# }
-
 class_mapping_emo = {
     'enterface': {
         'joy': 0,
@@ -208,6 +197,7 @@ if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("-m","--model", type=str, required=True)
+    parser.add_argument("-d", "--database", type=str, default="None", choices=["enterface", "emodb", "oreau", "french", "cafe", "ravdess"])
 
     args = parser.parse_args()
 
@@ -229,7 +219,7 @@ if __name__ == "__main__":
     n_frames = config["n_frames"]
     add_dropout = config["add_dropout"]
     model_name = config["model_name"]
-    database = config["database"]
+    database = config["database"] if args.database == "None" else args.database
     num_classes = len(class_mapping_emo[database])
     # database = 'oreau'
     metadata_file_test = get_metadata_filepath(database, data_dir, "test")
