@@ -44,6 +44,15 @@ class_mapping_emo = {
         'surprise': 5,
         'neutral': 6,
     },
+    'french_2': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+        'neutral': 6,
+    },
     'cafe': {
         'joy': 0,
         'sadness': 1,
@@ -189,6 +198,7 @@ def infer_long_audio(audio_path,
         plt.yticks(range(len(class_mapping_emo[config['database']])), list(class_mapping_emo[config['database']].keys()))
         plt.tight_layout()
         plt.savefig(image_path)
+        plt.close()
 
     return all_outputs
 
@@ -206,7 +216,8 @@ def infer_all_audio(data_dir,
                     n_samples, 
                     overlap, 
                     model_name, 
-                    device):
+                    device,
+                    id_model):
 
     our_dirs = ["Untrained", "Begginer", "Intermediate", "Expert"]
 
@@ -220,9 +231,14 @@ def infer_all_audio(data_dir,
                     for audio_file in os.listdir(task_path):
                         if audio_file.endswith('.wav'):
                             audio_path = os.path.join(task_path, audio_file)
+                            audio_name = os.path.splitext(audio_file)[0]
                             print(f"Processing {audio_path}...")
-                            image_path = audio_path.replace('.wav', '.png')
-                            save_path = audio_path.replace('.wav', '_outputs.pt')
+                            # image_path = audio_path.replace('.wav', '.png')
+                            # save_path = audio_path.replace('.wav', '_outputs.pt')
+                            if not os.path.exists(os.path.join(task_path, id_model)):
+                                os.makedirs(os.path.join(task_path, id_model))
+                            image_path = os.path.join(task_path, id_model, f"{audio_name}.png")
+                            save_path = os.path.join(task_path, id_model, f"{audio_name}_outputs.pt")
                             output_data = infer_long_audio(
                                 audio_path=audio_path,
                                 model=model,
@@ -305,7 +321,8 @@ def vad_all_audio(data_dir,
                   target_sr, 
                   n_samples, 
                   overlap,
-                  device):
+                  device,
+                  id_model):
 
     our_dirs = ["Untrained", "Begginer", "Intermediate", "Expert"]
 
@@ -319,8 +336,11 @@ def vad_all_audio(data_dir,
                     for audio_file in os.listdir(task_path):
                         if audio_file.endswith('.wav'):
                             audio_path = os.path.join(task_path, audio_file)
+                            audio_name = os.path.splitext(audio_file)[0]
                             print(f"Processing {audio_path}...")
-                            save_path = audio_path.replace('.wav', '_vad.pt')
+                            if not os.path.exists(os.path.join(task_path, id_model)):
+                                os.makedirs(os.path.join(task_path, id_model))
+                            save_path = os.path.join(task_path, id_model, f"{audio_name}_vad.pt")
                             output_data = vad_infer(
                                 audio_path=audio_path,
                                 target_sr=target_sr,
@@ -343,13 +363,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
-    model = load_model_for_inference(args.model_dir, device)
+    model_dir = args.model_dir
+    model = load_model_for_inference(model_dir, device)
     
-    config_path = os.path.join("trained", args.model_dir, "config.yaml")
+    config_path = os.path.join("trained", model_dir, "config.yaml")
     config = load_config(config_path)
     target_sr = config["target_sr"]
     n_samples = config["duration"] * target_sr
     model_name = config["model_name"]
+    id_model = model_dir.split('/')[-1]
 
     # For emotion recognition inference
     infer_all_audio(
@@ -359,7 +381,8 @@ if __name__ == "__main__":
         n_samples=n_samples,
         overlap=0.5,
         model_name=model_name,
-        device=device
+        device=device,
+        id_model=id_model
     )
 
     # For VAD inference
@@ -368,6 +391,7 @@ if __name__ == "__main__":
         target_sr=target_sr,
         n_samples=n_samples,
         overlap=0.5,
-        device=device
+        device=device,
+        id_model=id_model
     )
     print("Inference completed.")

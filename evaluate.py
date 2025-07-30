@@ -56,6 +56,15 @@ class_mapping_emo = {
         'surprise': 5,
         'neutral': 6,
     },
+    'french_2': {
+        'joy': 0,
+        'sadness': 1,
+        'anger': 2,
+        'fear': 3,
+        'disgust': 4,
+        'surprise': 5,
+        'neutral': 6,
+    },
     'cafe': {
         'joy': 0,
         'sadness': 1,
@@ -197,7 +206,7 @@ if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("-m","--model", type=str, required=True)
-    parser.add_argument("-d", "--database", type=str, default="None", choices=["enterface", "emodb", "oreau", "french", "cafe", "ravdess"])
+    parser.add_argument("-d", "--database", type=str, default="None", choices=["enterface", "emodb", "oreau", "french", "french_2", "cafe", "ravdess"])
 
     args = parser.parse_args()
 

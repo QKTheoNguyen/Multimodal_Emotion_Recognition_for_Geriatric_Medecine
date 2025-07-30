@@ -1,0 +1,3 @@
+[submodule "tools/harmof0"]
+	path = tools/harmof0
+	url = https://github.com/WX-Wei/HarmoF0.git

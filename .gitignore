@@ -1,0 +1,6 @@
+data/
+trained/
+config/multi_config_old/
+__pycache__/
+visualisations/
+logs/

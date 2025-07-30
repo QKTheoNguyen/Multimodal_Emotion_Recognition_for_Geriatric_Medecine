@@ -4,22 +4,19 @@ data_dir: /home/tnguyen/Documents/Emotion_recognition/Multimodal_Emotion_Recogni
 device: cuda
 duration: 3
 epochs: 150
-filters:
-- 32
-- 64
-- 128
 full_audio_length: false
 hop_length: 512
-learning_rate: 0.001
-model_name: resnet18
+learning_rate: 0.00001
+model_name: wav2vec2
 n_fft: 2048
 n_frames: null
 n_mels: 16
-target_sr: 22050
+target_sr: 16000
 transform: spectrogram
 verbose: false
 training: finetuned
 optimizer: adam
 augmentation: false
 RCS: 0
-database: enterface
+database: french_2
+wav2vec2_path: facebook/wav2vec2-base-960h
