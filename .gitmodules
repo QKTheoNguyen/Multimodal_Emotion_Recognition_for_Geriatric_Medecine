@@ -1,3 +1,6 @@
 [submodule "tools/harmof0"]
 	path = tools/harmof0
 	url = https://github.com/WX-Wei/HarmoF0.git
+[submodule "tools/timber_toolbox"]
+	path = tools/timber_toolbox
+	url = https://github.com/dfourer/timbre-descriptor-py.git
