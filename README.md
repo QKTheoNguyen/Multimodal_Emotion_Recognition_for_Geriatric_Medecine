@@ -3,7 +3,7 @@
 Welcome to the Speech Emotion Recognition project applied to Humanitude-based geriatric care.  
 This project aims to characterize the quality of the Humanitude interaction between caregivers and elderly patients by analyzing emotions expressed through speech as well as other speech features. Our focus lies in understanding how emotional cues reflect the presence of “Humanitude” principles in real-life caregiving settings.
 
-> Data was collected from numerous geriatric health establishments during natural caregiver-patient interactions. The subjects are composed of 23 female caregivers, of different levels of training Humanitude care
+> Data was collected from numerous geriatric health establishments during natural caregiver-patient interactions. The subjects are composed of 23 female caregivers, of different levels of training Humanitude care.
 
 ---
 
@@ -13,14 +13,13 @@ The project is organized into two main phases:
 
 ### 1. Training a Speech Emotion Recognition (SER) System
 - Train neural network models to classify emotions from speech signals.
-- Supported features include: **pitch (F0)**, **energy**, **MFCCs**, and other acoustic descriptors.
-- Several model architectures can be used, including CNNs and LSTM-based networks.
-- Public emotional speech datasets can be used (e.g., RAVDESS, CREMA-D) for pretraining or transfer learning.
+- Several model architectures can be used, including CNN vision models and transformers models for audio.
+- Public emotional speech datasets can be used (e.g., EmoDB, RAVDESS, CaFE) for pretraining or transfer learning.
 
 ### 2. Analyzing Emotion and Speech Features from Geriatric Care Audio
 - Extract speech-based features from caregiver-patient interactions.
-- Apply a trained SER model to detect emotional states over time.
-- Generate structured annotations for further qualitative and quantitative analysis (e.g., emotional trajectories, speech activity patterns).
+- Apply a trained SER model to detect emotional states over time. Note that the size of analysis windows must match the size of the training window.
+- Generate structured annotations for further analysis.
 
 ---
 
@@ -52,7 +51,7 @@ pip install -r requirements.txt
 rsync -a /data/ACAPELA_data_Nguyen/data .
 ```
 
-> Note: If you do not have access to this dataset, you can use a public emotional speech dataset (e.g., RAVDESS, EMO-DB) and adapt the preprocessing accordingly.
+> Note: If you do not have access to this dataset, you can use a public emotional speech dataset (e.g., RAVDESS, EMO-DB, CaFE) and adapt the preprocessing accordingly with `preprocessing.ipynb`.
 
 ## Usage
 
@@ -62,7 +61,7 @@ rsync -a /data/ACAPELA_data_Nguyen/data .
 python3 main.py
 ```
 
-Model checkpoints will be saved under the emorec/ directory.
+Model checkpoints will be saved in trained/emorec/ directory under a unique name.
 
 
 2. Evaluate your SER model
